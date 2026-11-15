@@ -5,8 +5,6 @@ local indent = require('md-indent.indent')
 local M = {}
 
 local defaults = {
-  -- nil means the local 'shiftwidth' value
-  indent_width = nil,
   filetypes = { 'markdown', 'markdown.native' },
   hl_group = 'MdIndent',
   -- Skip the YAML metadata block at the top of the file
@@ -39,9 +37,7 @@ function M.highlight()
 end
 
 local function scan_options()
-  local width = M.options.indent_width or vim.o.shiftwidth
   return {
-    indent_width = width > 0 and width or 2,
     frontmatter = M.options.frontmatter,
     setext_headings = M.options.setext_headings,
     indent_code_blocks = M.options.indent_code_blocks,

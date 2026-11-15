@@ -11,20 +11,23 @@ Usage
 
 Install with a plugin manager, then call setup:
 >
-    vim.g.md_indent_setup = { indent_width = 4 }
+    vim.g.md_indent_setup = { setext_headings = true }
     require('md-indent').setup()
 <
-Without any setup the plugin loads on its own and uses |'shiftwidth' for the
-indent width.
+Without any setup the plugin loads on its own.
 
-Enabled buffers get indentation for every line after a heading: >
+Enabled buffers get indentation for every line after a heading. A heading
+lines up at the column of the text of the heading above it, and body text
+lines up just past the hashes of its own heading: >
     # Heading
-    body text                        (no indent, level 1)
-        ## Subheading                (level 2)
-        body text                    (level 2)
-            ### Subsubheading        (level 3)
-            body text                (level 3)
+      body text             (level 1 body, past the '# ' of the level 1 heading)
+      ## Subheading         (level 2, under the level 1 body text)
+         body text          (level 2 body, past the '## ' of the level 2 heading)
+         ### Subsubheading  (level 3, under the level 2 body text)
+            body text       (level 3 body, past the '### ' of the level 3 heading)
 <
+So nesting follows the hashes, not |'shiftwidth'. A heading with no heading
+above it gets no offset.
 Existing line indentation is kept, so the offset is added on top of the spaces
 already in the line.
 
@@ -33,7 +36,6 @@ Options                                            *md-indent-options*
 
 All options are passed to |MDIndentSetup| equivalent, `require('md-indent').setup{}`.
 
-  indent_width        Number of spaces per heading level. Default: |'shiftwidth'|.
   filetypes           Filetypes to enable on. Default: { 'markdown', 'markdown.native' }.
   hl_group            Highlight group for the added spaces. Default: 'MdIndent',
                       which links to |hl-Normal|.

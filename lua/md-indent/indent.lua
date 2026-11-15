@@ -21,6 +21,11 @@ local function strip_leading(line)
   return line:sub(#lead + 1)
 end
 
+-- Number of leading whitespace characters of a line.
+local function lead_width(line)
+  return #line:match(leading)
+end
+
 -- Returns a heading level (1..6) for an ATX heading line, else nil.
 local function atx_level(line)
   local rest = strip_leading(line)
@@ -56,19 +61,27 @@ local function closes_fence(line, fence)
 end
 
 -- Scans `lines` and returns { { line = 0-based index, width = n }, ... }.
+-- A heading line gets the column of the text of the heading it sits under.
+-- Body text gets the column right past the hashes of its own heading.
 -- Only lines that need an offset are returned; existing line indentation is
 -- kept in the buffer text, so `width` is added on top of it.
 function M.scan(lines, opts)
   opts = opts or {}
-  local width = opts.indent_width or 2
   local use_setext = opts.setext_headings or false
   local indent_code = opts.indent_code_blocks ~= false
 
+  -- Nest of headings, innermost last: { level, head = heading column, body = text column }
+  local stack = {}
   local out = {}
-  local level = nil -- level of the heading the current line belongs to
   local fence = nil -- open code fence: { char, len }
   local paragraph = false -- previous line is paragraph text (setext candidate)
   local skip_until = opts.frontmatter and frontmatter_end(lines) or 0
+
+  -- The column of the text of the enclosing heading, or 0 outside any heading.
+  local function parent_body()
+    local top = stack[#stack]
+    return top and top.body or 0
+  end
 
   for i, line in ipairs(lines) do
     if i <= skip_until then
@@ -97,22 +110,39 @@ function M.scan(lines, opts)
       if not in_code then
         heading = atx_level(line)
       end
+      local offset
       if heading then
-        level = heading
-        paragraph = false
-      elseif use_setext and paragraph then
-        local underline = strip_leading(line):match('^[=-]+%s*$')
-        if underline then
-          level = underline:sub(1, 1) == '=' and 1 or 2
-          paragraph = false
+        -- Drops the headings deeper than this one, then reads the enclosing heading.
+        while #stack > 0 and stack[#stack].level >= heading do
+          stack[#stack] = nil
         end
-      elseif is_blank(line) then
+        offset = parent_body()
+        -- Body text starts right after the hashes and the space of the heading.
+        stack[#stack + 1] = { level = heading, head = offset, body = offset + lead_width(line) + heading + 1 }
         paragraph = false
       else
-        paragraph = true
+        local underline = use_setext and paragraph
+            and strip_leading(line):match('^[=-]+%s*$')
+        if underline then
+          local level = underline:sub(1, 1) == '=' and 1 or 2
+          -- A setext heading keeps its text on the line above, so no extra pad.
+          while #stack > 0 and stack[#stack].level >= level do
+            stack[#stack] = nil
+          end
+          offset = parent_body()
+          stack[#stack + 1] = { level = level, head = offset, body = offset }
+          paragraph = false
+        elseif is_blank(line) then
+          paragraph = false
+          local top = stack[#stack]
+          offset = top and top.head or 0
+        else
+          paragraph = true
+          local top = stack[#stack]
+          offset = top and top.body or 0
+        end
       end
 
-      local offset = level and (level - 1) * width or 0
       if offset > 0 and (not in_code or indent_code) then
         out[#out + 1] = { line = i - 1, width = offset }
       end

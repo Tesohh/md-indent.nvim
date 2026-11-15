@@ -21,13 +21,13 @@ renders as:
 
 ```markdown
 # Heading
-some text asdasd
-    ## Subheading
-    some more text
-        ### Subsubheading
-        some more, more text
-    ## Subheading 2
-    lorem
+  some text asdasd
+  ## Subheading
+     some more text
+     ### Subsubheading
+         the text is aligned to the heading text, just like org mode
+  ## Subheading 2
+     lorem
 ```
 
 ## Install
@@ -37,18 +37,16 @@ With a plugin manager such as lazy.nvim:
 ```lua
 {
   'your-org/md-indent.nvim',
-  opts = { indent_width = 4 },
 }
 ```
 
 Or with `vim.g`:
 
 ```lua
-vim.g.md_indent_setup = { indent_width = 4 }
+vim.g.md_indent_setup = { setext_headings = true }
 ```
 
-No setup is needed: the plugin loads by itself and uses `shiftwidth` as the
-indent width.
+No setup is needed: the plugin loads by itself.
 
 ## Options
 
@@ -56,7 +54,6 @@ Passed to `require('md-indent').setup()`:
 
 | Option               | Default                      | Description                                   |
 | -------------------- | ---------------------------- | ------------------------------------------- |
-| `indent_width`       | `shiftwidth`                 | Spaces per heading level                     |
 | `filetypes`          | `{ 'markdown', 'markdown.native' }` | Filetypes to enable on                |
 | `hl_group`           | `'MdIndent'`                 | Highlight group of the added spaces          |
 | `frontmatter`        | `true`                       | Skip the YAML metadata block at the top      |
@@ -71,12 +68,18 @@ Passed to `require('md-indent').setup()`:
 
 ## Behaviour
 
-- Heading level comes from the leading hashes (1 to 6), so level 1 adds no offset and level 2 adds one `indent_width`.
-- Body text gets the offset of the heading it follows.
+- A heading nests under the heading text of the heading it sits under, so
+  `## Sub` lines up at the column of the level 1 body text. Nesting follows the
+  hashes only, not `shiftwidth`.
+- Body text lines up with the heading text it follows, the way org-indent does:
+  the heading offset plus the hashes and the space after them.
+- A setext heading keeps its text on the line above, so body text under it gets
+  no extra alignment.
 - Lines keep their own leading whitespace; the offset is added on top.
 - Headings inside a fenced code block are not counted as headings.
 - Headings with 4 or more leading spaces are treated as code, like CommonMark.
-- Blank lines get no offset.
+- Blank lines get the offset of the heading they sit under, and no extra
+  alignment.
 - Fold lines keep the indent: the plugin prefixes the fold text with the offset
   of the fold's first line. It sets `'foldtext'` when nothing owns it, and pads the
   fold text function of the plugin that owns it (for example nvim-ufo), for string
