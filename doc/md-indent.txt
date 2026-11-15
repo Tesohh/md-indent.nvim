@@ -1,0 +1,74 @@
+*md-indent.txt*  Indent nested Markdown headings like org-indent
+
+md-indent              *md-indent*  Heading indentation for Markdown
+
+Minimal plugin that indents Markdown lines by the heading level they sit
+under. The indentation is added with virtual text, so the buffer text is not
+modified. Requires Nvim 0.10 or newer.
+
+===========================================================================
+Usage
+
+Install with a plugin manager, then call setup:
+>
+    vim.g.md_indent_setup = { indent_width = 4 }
+    require('md-indent').setup()
+<
+Without any setup the plugin loads on its own and uses |'shiftwidth' for the
+indent width.
+
+Enabled buffers get indentation for every line after a heading: >
+    # Heading
+    body text                        (no indent, level 1)
+        ## Subheading                (level 2)
+        body text                    (level 2)
+            ### Subsubheading        (level 3)
+            body text                (level 3)
+<
+Existing line indentation is kept, so the offset is added on top of the spaces
+already in the line.
+
+===========================================================================
+Options                                            *md-indent-options*
+
+All options are passed to |MDIndentSetup| equivalent, `require('md-indent').setup{}`.
+
+  indent_width        Number of spaces per heading level. Default: |'shiftwidth'|.
+  filetypes           Filetypes to enable on. Default: { 'markdown', 'markdown.native' }.
+  hl_group            Highlight group for the added spaces. Default: 'MdIndent',
+                      which links to |hl-Normal|.
+  frontmatter         Skip the YAML metadata block at the top of the file.
+                      Default: true.
+  setext_headings     Treat '=' and '-' underlines as level 1 and level 2
+                      headings. Default: false.
+  indent_code_blocks  Indent fenced code block lines with the current heading.
+                      Default: true. Set false to keep code lines flush left.
+
+===========================================================================
+Commands                                         *md-indent-commands*
+
+:MDIndentEnable      Turn heading indentation on for the current buffer.
+:MDIndentDisable     Remove heading indentation from the current buffer.
+:MDIndentToggle      Turn heading indentation on or off in the current buffer.
+
+===========================================================================
+Notes                                            *md-indent-notes*
+
+Headings are detected by the number of leading hashes, up to 6, and must be
+followed by a space. A heading needs at most 3 leading spaces.
+
+Lines inside a fenced code block stay at the same offset as the block. They
+are not scanned for headings. Set |md-indent-options| indent_code_blocks to
+false to leave code block lines flush left.
+
+Indentation is display-only: undo, diffs, and the written file see the
+original text. |'breakindent'| helps with wrapped lines.
+
+Folded lines show 'foldtext' instead of the line, so the plugin prefixes the
+fold text with the offset of the fold's first line. When nothing owns
+|'foldtext' the plugin sets it. When another plugin owns it, such as nvim-ufo,
+the plugin pads that plugin's fold text function instead, which handles string
+and chunk fold texts. The plugin restores the option and the function when
+|MDIndentDisable| leaves no enabled buffer.
+
+vim:tw=78:ts=8:ft=help:norl:
