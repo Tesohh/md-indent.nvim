@@ -1,10 +1,9 @@
 # md-indent.nvim
+Indents nested Markdown headings the way `org-indent-mode` indents org headings.
+The plugin adds the indentation as virtual text, so buffer text stays unchanged.
+Undo, diffs, and the saved file keep the original lines.
 
-Indents nested Markdown headings the way emacs' `org-indent-mode` indents org
-headings. The indentation is added as virtual text, so buffer text stays
-unchanged: undo, diffs and the saved file keep the original lines.
-
-Requires Neovim 0.10 or newer (`virt_text_pos = 'inline'`).
+Requires Neovim 0.10 or newer, which supports `virt_text_pos = 'inline'`.
 
 ```markdown
 # Heading
@@ -31,64 +30,77 @@ renders as:
 ```
 
 ## Install
+Add the package to `init.lua`, then restart Nvim with `:restart`:
 
-With a plugin manager such as lazy.nvim:
+```lua
+vim.pack.add({ 'https://github.com/your-org/md-indent.nvim' })
+
+require('md-indent').setup()
+```
+
+`vim.pack` needs Neovim 0.11 or newer.
+The lockfile `nvim.pack.json` records the installed revision.
+
+Put options in the `setup` call:
+
+```lua
+require('md-indent').setup({ setext_headings = true })
+```
+
+With lazy.nvim, use this entry:
 
 ```lua
 {
   'your-org/md-indent.nvim',
+  opts = { setext_headings = true },
 }
 ```
 
-Or with `vim.g`:
+The plugin reads `vim.g.md_indent_setup` before the `setup` call runs:
 
 ```lua
 vim.g.md_indent_setup = { setext_headings = true }
 ```
 
-No setup is needed: the plugin loads by itself.
+You may omit the setup call: the plugin loads by itself.
 
 ## Options
+Pass these options to `require('md-indent').setup()`:
 
-Passed to `require('md-indent').setup()`:
-
-| Option               | Default                      | Description                                   |
-| -------------------- | ---------------------------- | ------------------------------------------- |
-| `filetypes`          | `{ 'markdown', 'markdown.native' }` | Filetypes to enable on                |
-| `hl_group`           | `'MdIndent'`                 | Highlight group of the added spaces          |
-| `frontmatter`        | `true`                       | Skip the YAML metadata block at the top      |
-| `setext_headings`    | `false`                      | Count `=` / `-` underlines as level 1 / 2    |
-| `indent_code_blocks` | `true`                       | Indent code block lines with the heading     |
+- `filetypes` - The filetypes to enable on, default `{ 'markdown', 'markdown.native' }`
+- `hl_group` - The highlight group of the added spaces, default `'MdIndent'`
+- `frontmatter` - Skip the YAML metadata block at the top of the file, default `true`
+- `setext_headings` - Count `=` and `-` underlines as level 1 and level 2 headings, default `false`
+- `indent_code_blocks` - Indent code block lines with the heading, default `true`
 
 ## Commands
+- `:MDIndentEnable` - Indent headings in the current buffer
+- `:MDIndentDisable` - Remove the indentation from the current buffer
+- `:MDIndentToggle` - Switch the indentation on or off
 
-- `:MDIndentEnable` - indent headings in the current buffer
-- `:MDIndentDisable` - remove the indentation from the current buffer
-- `:MDIndentToggle` - switch the indentation on or off
-
-## Behaviour
-
-- A heading nests under the heading text of the heading it sits under, so
-  `## Sub` lines up at the column of the level 1 body text. Nesting follows the
-  hashes only, not `shiftwidth`.
-- Body text lines up with the heading text it follows, the way org-indent does:
-  the heading offset plus the hashes and the space after them.
-- A setext heading keeps its text on the line above, so body text under it gets
-  no extra alignment.
-- Lines keep their own leading whitespace; the offset is added on top.
-- Headings inside a fenced code block are not counted as headings.
-- Headings with 4 or more leading spaces are treated as code, like CommonMark.
-- Blank lines get the offset of the heading they sit under, and no extra
-  alignment.
-- Fold lines keep the indent: the plugin prefixes the fold text with the offset
-  of the fold's first line. It sets `'foldtext'` when nothing owns it, and pads the
-  fold text function of the plugin that owns it (for example nvim-ufo), for string
-  and chunk fold texts alike. The option and the function are restored when no
-  enabled buffer is left.
+## Behavior
+- A heading nests under the text of the heading above
+  - `## Sub` lines up at the column of the level 1 body text
+  - The nesting comes from the heading hashes only
+- Body text lines up with the heading text above
+  - The offset equals the heading offset plus the hashes and the space after them
+- A setext heading keeps its text on the line above
+  - Body text under that heading gets the heading offset only
+- Each line keeps its own leading whitespace, and the plugin adds the offset on top
+- The plugin ignores headings in a fenced code block
+- The plugin treats a heading with 4 leading spaces or more as code, like CommonMark does
+- Blank lines get the heading offset only
+- Fold lines keep the indent
+  - The plugin prefixes the fold text with the offset of the first line of the fold
+  - The plugin sets `'foldtext'` while that option holds the default value
+  - The plugin pads the fold text function of the plugin that owns that option
+    - The pad covers string fold text and chunk fold text alike
+  - The plugin restores the option and the function after every enabled buffer is off
 
 Set `'breakindent'` to keep wrapped lines aligned with the indent.
 
 ## Tests
+Run the script with the nvim on PATH, or point `NVIM_BIN` at another nvim:
 
 ```sh
 ./tests/run.sh           # needs the nvim on PATH, Nvim 0.10 or newer
@@ -96,5 +108,4 @@ NVIM_BIN=/path/to/nvim ./tests/run.sh
 ```
 
 ## Help
-
 `:help md-indent`
