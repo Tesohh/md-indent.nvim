@@ -33,7 +33,7 @@ renders as:
 Add the package to `init.lua`, then restart Nvim with `:restart`:
 
 ```lua
-vim.pack.add({ 'https://github.com/your-org/md-indent.nvim' })
+vim.pack.add({ 'https://github.com/Tesohh/md-indent.nvim' })
 
 require('md-indent').setup()
 ```
@@ -51,7 +51,7 @@ With lazy.nvim, use this entry:
 
 ```lua
 {
-  'your-org/md-indent.nvim',
+  'Tesohh/md-indent.nvim',
   opts = { setext_headings = true },
 }
 ```
