@@ -33,9 +33,10 @@ local function atx_level(line)
   if not hashes or #hashes > 6 then
     return nil
   end
-  -- '#' followed by text is not a heading ('' means an empty heading).
+  -- '#' must be followed by a space, so a heading that is still being typed
+  -- stays body text and does not move the line around.
   local after = rest:sub(#hashes + 1)
-  if after ~= '' and after:sub(1, 1) ~= ' ' and after:sub(1, 1) ~= '\t' then
+  if after:sub(1, 1) ~= ' ' and after:sub(1, 1) ~= '\t' then
     return nil
   end
   return #hashes

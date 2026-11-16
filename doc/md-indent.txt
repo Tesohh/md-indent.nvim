@@ -57,7 +57,9 @@ Commands                                         *md-indent-commands*
 Notes                                            *md-indent-notes*
 
 Headings are detected by the number of leading hashes, up to 6, and must be
-followed by a space. A heading needs at most 3 leading spaces.
+followed by a space. Hashes without a space are body text, so a heading does
+not move the line while you type it. A heading needs at most 3 leading
+spaces.
 
 Lines inside a fenced code block stay at the same offset as the block. They
 are not scanned for headings. Set |md-indent-options| indent_code_blocks to
