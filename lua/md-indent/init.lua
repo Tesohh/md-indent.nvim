@@ -149,6 +149,9 @@ function M.update(buf)
     vim.api.nvim_buf_set_extmark(buf, ns, e.line, 0, {
       virt_text = { { string.rep(' ', e.width), M.options.hl_group } },
       virt_text_pos = 'inline',
+      -- Left gravity keeps the extmark at column 0 when text is typed there,
+      -- which also draws the insert cursor after the indent.
+      right_gravity = false,
       virt_text_repeat_linebreak = true,
     })
   end

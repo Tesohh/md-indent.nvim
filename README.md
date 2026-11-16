@@ -90,6 +90,8 @@ Pass these options to `require('md-indent').setup()`:
 - The plugin ignores headings in a fenced code block
 - The plugin treats a heading with 4 leading spaces or more as code, like CommonMark does
 - Blank lines get the heading offset only
+- The cursor and typed text sit after the indent
+  - The extmark pulls left, so text typed at column 0 lands after the indent
 - Fold lines keep the indent
   - The plugin prefixes the fold text with the offset of the first line of the fold
   - The plugin sets `'foldtext'` while that option holds the default value

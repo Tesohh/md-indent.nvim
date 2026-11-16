@@ -66,6 +66,9 @@ false to leave code block lines flush left.
 Indentation is display-only: undo, diffs, and the written file see the
 original text. |'breakindent'| helps with wrapped lines.
 
+The extmarks pull left, so text typed at column 0 of an indented line lands
+after the indent, and the insert cursor is drawn after the indent too.
+
 Folded lines show 'foldtext' instead of the line, so the plugin prefixes the
 fold text with the offset of the fold's first line. When nothing owns
 |'foldtext' the plugin sets it. When another plugin owns it, such as nvim-ufo,

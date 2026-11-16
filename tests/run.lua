@@ -114,6 +114,10 @@ local function offset(buf, line)
 end
 
 local buf = render(example)
+-- The extmark must pull left, so typed text lands after the indent and the
+-- insert cursor is drawn after the indent too.
+local marks = vim.api.nvim_buf_get_extmarks(buf, ns, 0, -1, { details = true })
+eq(marks[1][4].right_gravity, false, 'extmark has left gravity')
 eq(offset(buf, 0), 0, 'rendered level 1 heading')
 eq(offset(buf, 2), 2, 'rendered level 2 heading')
 eq(offset(buf, 4), 5, 'rendered level 3 heading')
