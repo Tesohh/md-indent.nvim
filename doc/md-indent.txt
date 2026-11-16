@@ -72,10 +72,12 @@ The extmarks pull left, so text typed at column 0 of an indented line lands
 after the indent, and the insert cursor is drawn after the indent too.
 
 Folded lines show 'foldtext' instead of the line, so the plugin prefixes the
-fold text with the offset of the fold's first line. When nothing owns
-|'foldtext' the plugin sets it. When another plugin owns it, such as nvim-ufo,
-the plugin pads that plugin's fold text function instead, which handles string
-and chunk fold texts. The plugin restores the option and the function when
-|MDIndentDisable| leaves no enabled buffer.
+fold text with the offset of the fold's first line. The plugin touches
+|'foldtext' only in windows that show an enabled buffer, so other buffers keep
+their own folding. When nothing owns the option the plugin sets it. When
+another plugin owns it, such as nvim-ufo, the plugin pads that plugin's fold
+text function instead, which handles string and chunk fold texts. The plugin
+restores the option and the function when |MDIndentDisable| leaves no enabled
+buffer.
 
 vim:tw=78:ts=8:ft=help:norl:

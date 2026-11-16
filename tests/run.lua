@@ -178,6 +178,27 @@ vim.api.nvim_set_current_buf(current_buf)
 mod.setup({ indent_code_blocks = true })
 mod.update(buf)
 
+-- Fold text is only taken over in windows that show an enabled buffer.
+local default_foldtext = vim.api.nvim_get_option_value('foldtext', { win = 0 })
+vim.o.foldtext = default_foldtext
+local md_buf = render(example)
+vim.api.nvim_set_current_buf(md_buf)
+local md_win = vim.api.nvim_get_current_win()
+vim.cmd('rightbelow vsplit')
+local plain_win = vim.api.nvim_get_current_win()
+local plain = vim.api.nvim_create_buf(false, true)
+vim.api.nvim_buf_set_lines(plain, 0, -1, false, { '# Plain', 'text' })
+vim.api.nvim_win_set_buf(plain_win, plain)
+mod.enable(md_buf)
+local md_ft = vim.api.nvim_get_option_value('foldtext', { win = md_win })
+local plain_ft = vim.api.nvim_get_option_value('foldtext', { win = plain_win })
+eq(md_ft:find('md_indent') ~= nil, true, 'foldtext is taken over in the markdown window')
+eq(plain_ft, default_foldtext, 'foldtext in a plain window is untouched')
+eq(vim.o.foldtext, default_foldtext, 'the global foldtext is untouched')
+mod.disable(md_buf)
+eq(vim.api.nvim_get_option_value('foldtext', { win = md_win }), default_foldtext, 'disable restores the foldtext of the markdown window')
+vim.api.nvim_win_close(plain_win, true)
+
 -- A heading removed by a change shifts the deeper headings up
 vim.api.nvim_buf_set_lines(buf, 2, 3, false, { 'text under level 1' })
 mod.schedule_update(buf)

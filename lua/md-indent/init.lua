@@ -169,20 +169,22 @@ function M.schedule_update(buf)
   end)
 end
 
--- Takes over 'foldtext' when nothing owns it, otherwise pads the fold text
--- function of the plugin that owns the option.
+-- Takes over 'foldtext' in windows that show an enabled buffer, so other
+-- buffers keep their own folding. When another plugin owns the option, its
+-- fold text function is padded instead.
 local function assert_foldtext()
-  local current = vim.o.foldtext
-  if current == foldtext_expr then
-    return
-  end
-  if current == '' or current == builtin_foldtext then
-    vim.o.foldtext = foldtext_expr
-    return
-  end
-  if not pad_foldtext_fn(current) and not foldtext_warned then
-    foldtext_warned = true
-    vim.notify('md-indent: cannot pad the foldtext of ' .. current, vim.log.levels.WARN)
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    if enabled[vim.api.nvim_win_get_buf(win)] then
+      local current = vim.api.nvim_get_option_value('foldtext', { win = win })
+      if current ~= foldtext_expr then
+        if current == '' or current == builtin_foldtext then
+          vim.api.nvim_set_option_value('foldtext', foldtext_expr, { win = win })
+        elseif not pad_foldtext_fn(current) and not foldtext_warned then
+          foldtext_warned = true
+          vim.notify('md-indent: cannot pad the foldtext of ' .. current, vim.log.levels.WARN)
+        end
+      end
+    end
   end
 end
 
@@ -194,9 +196,8 @@ function M.schedule_assert()
   assert_pending = true
   vim.schedule(function()
     assert_pending = false
-    for _ in pairs(enabled) do
+    if next(enabled) then
       assert_foldtext()
-      return
     end
   end)
 end
@@ -207,12 +208,11 @@ function M.enable(buf)
     vim.notify('md-indent: needs Nvim 0.10 or newer', vim.log.levels.WARN)
     return false
   end
-  assert_foldtext()
-  if enabled[buf] then
-    return true
+  if not enabled[buf] then
+    enabled[buf] = true
+    M.update(buf)
   end
-  enabled[buf] = true
-  M.update(buf)
+  assert_foldtext()
   return true
 end
 
@@ -222,9 +222,12 @@ function M.disable(buf)
   pending[buf] = nil
   fold_offsets[buf] = nil
   vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
-  for _ in pairs(enabled) do
-    return
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    if vim.api.nvim_get_option_value('foldtext', { win = win }) == foldtext_expr then
+      vim.api.nvim_set_option_value('foldtext', builtin_foldtext, { win = win })
+    end
   end
+  -- A previous version set the option globally, so clean it up too.
   if vim.o.foldtext == foldtext_expr then
     vim.o.foldtext = builtin_foldtext
   end

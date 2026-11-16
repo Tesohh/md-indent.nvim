@@ -96,7 +96,8 @@ Pass these options to `require('md-indent').setup()`:
   - The extmark pulls left, so text typed at column 0 lands after the indent
 - Fold lines keep the indent
   - The plugin prefixes the fold text with the offset of the first line of the fold
-  - The plugin sets `'foldtext'` while that option holds the default value
+  - The plugin sets `'foldtext'` in windows that show an enabled buffer, so other buffers keep their own folding
+  - The plugin pads the fold text function of the plugin that owns that option
   - The plugin pads the fold text function of the plugin that owns that option
     - The pad covers string fold text and chunk fold text alike
   - The plugin restores the option and the function after every enabled buffer is off
