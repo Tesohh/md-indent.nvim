@@ -1,4 +1,4 @@
-*md-indent.txt*  Indent nested Markdown headings like org-indent
+*md-indent.txt*  Indent nested Markdown headings by their level
 
 md-indent              *md-indent*  Heading indentation for Markdown
 
@@ -16,18 +16,18 @@ Install with a plugin manager, then call setup:
 <
 Without any setup the plugin loads on its own.
 
-Enabled buffers get indentation for every line after a heading. A heading
-lines up at the column of the text of the heading above it, and body text
-lines up just past the hashes of its own heading: >
+Enabled buffers get indentation for every line after a heading. A heading of
+level n sits n - 1 columns in, and its body text lines up right past the
+hashes of the heading, at 2 * n columns: >
     # Heading
       body text             (level 1 body, past the '# ' of the level 1 heading)
-      ## Subheading         (level 2, under the level 1 body text)
-         body text          (level 2 body, past the '## ' of the level 2 heading)
-         ### Subsubheading  (level 3, under the level 2 body text)
-            body text       (level 3 body, past the '### ' of the level 3 heading)
+     ## Subheading          (level 2, one column in)
+        body text           (level 2 body, past the '## ' of the level 2 heading)
+      ### Subsubheading     (level 3, two columns in)
+           body text        (level 3 body, past the '### ' of the level 3 heading)
 <
-So nesting follows the hashes, not |'shiftwidth'. A heading with no heading
-above it gets no offset.
+So nesting follows the hashes, not |'shiftwidth'. The offset comes from the
+heading level alone, not from the heading above.
 Existing line indentation is kept, so the offset is added on top of the spaces
 already in the line.
 

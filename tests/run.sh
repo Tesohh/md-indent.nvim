@@ -18,8 +18,8 @@ if command -v script >/dev/null 2>&1; then
   timeout_cmd='' # 'timeout' is absent on macOS
   command -v timeout >/dev/null 2>&1 && timeout_cmd='timeout 30'
   $timeout_cmd script -q -c "$cmd" "$out" >/dev/null 2>&1 || true
-  # A level 2 heading nests under the level 1 text, so the pad is 2 spaces.
-  if plain "$out" | grep -a '  +--  4 lines: ## Sub'; then
+  # A level 2 heading sits one column in, so the pad is 1 space.
+  if plain "$out" | grep -a ' +--  4 lines: ## Sub'; then
     echo 'ok   fold line keeps the heading indent'
   else
     echo 'FAIL fold line lost the heading indent'

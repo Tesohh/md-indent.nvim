@@ -44,50 +44,51 @@ local example = {
   'lorem',
 }
 
-eq(scan(example)[0], nil, 'atx level 1 heading gets no offset')
-eq(scan(example)[1], 2, 'body text under level 1 lines up past the heading text')
-eq(scan(example)[2], 2, 'level 2 heading nests under the level 1 text')
-eq(scan(example)[3], 5, 'body text under level 2')
-eq(scan(example)[4], 5, 'level 3 heading nests under the level 2 text')
-eq(scan(example)[5], 9, 'body text under level 3')
-eq(scan(example)[6], 2, 'level 2 heading after level 3')
-eq(scan(example)[7], 5, 'body text after level 3 heading')
+eq(scan(example)[0], nil, 'level 1 heading gets no offset')
+eq(scan(example)[1], 2, 'level 1 body lines up with the heading text')
+eq(scan(example)[2], 1, 'level 2 heading sits one column in')
+eq(scan(example)[3], 4, 'level 2 body lines up with the heading text')
+eq(scan(example)[4], 2, 'level 3 heading sits two columns in')
+eq(scan(example)[5], 6, 'level 3 body lines up with the heading text')
+eq(scan(example)[6], 1, 'level 2 heading after level 3')
+eq(scan(example)[7], 4, 'level 2 body after level 3 heading')
 
-eq(scan({ '#### Deep', 'text' })[0], nil, 'heading with no parent sits flush left')
-eq(scan({ '#### Deep', 'text' })[1], 5, 'level 4 body text lines up past the hashes')
+eq(scan({ '#### Deep', 'text' })[0], 3, 'heading offset only depends on the level')
+eq(scan({ '#### Deep', 'text' })[1], 8, 'level 4 body lines up with the heading text')
 eq(scan({ '#Heading', 'text' })[0], nil, 'no space after hashes is not a heading')
 eq(scan({ '##', 'text' })[0], nil, 'hashes without a space are not a heading')
 eq(scan({ '##', 'text' })[1], nil, 'hashes without a space do not indent the next line')
 eq(scan({ '# A', '##', 'text' })[1], 2, 'hashes without a space are body text')
 eq(scan({ '# A', '##', 'text' })[2], 2, 'text after typed hashes stays under the level 1 heading')
-eq(scan({ '## Sub', '###', 'text' })[1], 3, 'typed hashes under a heading are body text')
-eq(scan({ '## Sub', '###', 'text' })[2], 3, 'text after typed hashes keeps the enclosing heading')
+eq(scan({ '## Sub', '###', 'text' })[1], 4, 'typed hashes under a heading are body text')
+eq(scan({ '## Sub', '###', 'text' })[2], 4, 'text after typed hashes keeps the enclosing heading')
 eq(scan({ '####### Too many' })[0], nil, 'more than 6 hashes is not a heading')
 eq(scan({ '    ## Indented code' })[0], nil, 'heading with 4 leading spaces is code')
-eq(scan({ ' ## Sub' })[0], nil, 'heading with no parent sits flush left')
-eq(scan({ ' ## Sub', 'text' })[1], 4, 'leading spaces of the heading count in the body offset')
-eq(scan({ '# A', '', '## B' })[2], 2, 'blank line keeps the heading level')
+eq(scan({ ' ## Sub' })[0], 2, 'leading spaces of the heading shift the heading offset')
+eq(scan({ ' ## Sub', 'text' })[1], 5, 'leading spaces of the heading count in the body offset')
+eq(scan({ '# A', '', '## B' })[2], 1, 'blank line keeps the heading level')
 
 -- Code fences ----------------------------------------------------------------
-eq(scan({ '## Sub', '```', '# fake heading', 'code', '```', 'text' })[1], 3, 'fence line is indented')
-eq(scan({ '## Sub', '```', '# fake', 'code', '```', 'text' })[2], 3, 'heading inside fence does not change level')
-eq(scan({ '## Sub', '```', 'code', '```', 'text' })[4], 3, 'text after a fence keeps the level')
-eq(scan({ '### Sub', '~~~', 'code', '~~~' })[1], 4, 'tilde fence is indented')
+eq(scan({ '## Sub', '```', '# fake heading', 'code', '```', 'text' })[1], 4, 'fence line is indented')
+eq(scan({ '## Sub', '```', '# fake', 'code', '```', 'text' })[2], 4, 'heading inside fence does not change level')
+eq(scan({ '## Sub', '```', 'code', '```', 'text' })[4], 4, 'text after a fence keeps the level')
+eq(scan({ '### Sub', '~~~', 'code', '~~~' })[1], 6, 'tilde fence is indented')
 eq(scan({ '# A', '## Sub', '```', 'code', '```', 'text' }, { indent_code_blocks = false })[2], nil, 'code line is not indented')
 eq(scan({ '# A', '## Sub', '```', 'code', '```', '```' }, { indent_code_blocks = false })[5], nil, 'closing fence is not indented')
-eq(scan({ '# A', '## Sub', '```', 'code', '```', 'text' }, { indent_code_blocks = false })[5], 5, 'text outside fence is indented')
+eq(scan({ '# A', '## Sub', '```', 'code', '```', 'text' }, { indent_code_blocks = false })[5], 4, 'text outside fence is indented')
 
 -- YAML metadata --------------------------------------------------------------
 eq(scan({ '---', 'title: x', '---', '## Sub', 'text' })[1], nil, 'metadata line is not indented')
-eq(scan({ '---', 'title: x', '---', '# Top', '## Sub', 'text' })[5], 5, 'heading after metadata')
+eq(scan({ '---', 'title: x', '---', '# Top', '## Sub', 'text' })[5], 4, 'heading after metadata')
 
 -- Setext headings ------------------------------------------------------------
-eq(scan({ 'Title', '=====', 'text' }, { setext_headings = true })[2], nil, 'setext level 1 body gets no offset')
-eq(scan({ 'Title', '---', 'text' }, { setext_headings = true })[2], nil, 'setext level 2 with no parent sits flush left')
-eq(scan({ 'Title', '=====', '## Sub', 'body' }, { setext_headings = true })[3], 3, 'body text after an atx heading below a setext level 1')
--- A setext heading puts its text on the line above, so body text gets no pad.
-eq(scan({ 'Title', '=====', 'body' }, { setext_headings = true })[2], nil, 'setext body text gets no pad')
-eq(scan({ 'Title', '=====', '', 'text' }, { setext_headings = true })[3], nil, 'level 1 body text gets no offset')
+eq(scan({ 'Title', '=====', 'text' }, { setext_headings = true })[2], 2, 'setext level 1 body lines up with the heading text')
+eq(scan({ 'Title', '---', 'text' }, { setext_headings = true })[2], 4, 'setext level 2 body lines up with the heading text')
+eq(scan({ 'Title', '=====', '## Sub', 'body' }, { setext_headings = true })[2], 1, 'atx heading below a setext level 1')
+eq(scan({ 'Title', '=====', '## Sub', 'body' }, { setext_headings = true })[3], 4, 'body text below an atx heading under a setext level 1')
+-- A setext heading puts its text on the line above, so only the underline moves.
+eq(scan({ 'Title', '=====', 'body' }, { setext_headings = true })[2], 2, 'setext body text is indented')
+eq(scan({ 'Title', '=====', '', 'text' }, { setext_headings = true })[3], 2, 'level 1 body text is indented')
 
 -- Integration with extmarks --------------------------------------------------
 
@@ -124,19 +125,19 @@ local buf = render(example)
 local marks = vim.api.nvim_buf_get_extmarks(buf, ns, 0, -1, { details = true })
 eq(marks[1][4].right_gravity, false, 'extmark has left gravity')
 eq(offset(buf, 0), 0, 'rendered level 1 heading')
-eq(offset(buf, 2), 2, 'rendered level 2 heading')
-eq(offset(buf, 4), 5, 'rendered level 3 heading')
-eq(offset(buf, 6), 2, 'rendered level back to 2')
+eq(offset(buf, 2), 1, 'rendered level 2 heading')
+eq(offset(buf, 4), 2, 'rendered level 3 heading')
+eq(offset(buf, 6), 1, 'rendered level back to 2')
 
 -- Nesting follows the heading prefixes, not 'shiftwidth'
 vim.o.shiftwidth = 8
 local wider = render(example)
-eq(offset(wider, 2), 2, 'a deeper heading ignores shiftwidth')
-eq(offset(wider, 4), 5, 'a level 3 heading nests under the level 2 text')
+eq(offset(wider, 2), 1, 'a deeper heading ignores shiftwidth')
+eq(offset(wider, 4), 2, 'a level 3 heading sits two columns in')
 
 -- Changing an option updates existing buffers
 local fence_buf = render({ '## Sub', '```', 'code', '```' })
-eq(offset(fence_buf, 1), 3, 'fenced code lines up with the heading text')
+eq(offset(fence_buf, 1), 4, 'fenced code lines up with the heading text')
 mod.setup({ indent_code_blocks = false })
 eq(offset(fence_buf, 1), 0, 'setup with indent_code_blocks false drops the code indent')
 eq(vim.api.nvim_buf_get_lines(fence_buf, 1, 2, false)[1], '```', 'buffer text stays untouched')
@@ -151,24 +152,24 @@ vim.api.nvim_set_current_buf(fold_buf)
 vim.v.foldstart = 3
 local builtin_text = mod.foldtext()
 mod.disable(fold_buf)
-eq(builtin_text:sub(1, 2), '  ', 'builtin fold text keeps the offset')
+eq(builtin_text:sub(1, 1), ' ', 'builtin fold text keeps the offset')
 
 local chunks_mod = { foldtext = function() return { { 'ufo', 'Comment' } } end }
 package.loaded['fake-ufo'] = chunks_mod
 vim.o.foldtext = "v:lua.require'fake-ufo'.foldtext()"
 mod.enable(fold_buf)
 local chunks = chunks_mod.foldtext()
-eq(chunks[1][1], '  ', 'chunk fold text gets the offset')
+eq(chunks[1][1], ' ', 'chunk fold text gets the offset')
 eq(chunks[2][1], 'ufo', 'chunk fold text stays intact')
 -- A cached chunk table must not collect extra pads across renders.
 local again = chunks_mod.foldtext()
 eq(#again, 2, 'chunk fold text pads once per render')
-eq(again[1][1], '  ', 'second render keeps one pad')
+eq(again[1][1], ' ', 'second render keeps one pad')
 local string_mod = { foldtext = function() return 'ufo' end }
 package.loaded['fake-ufo-2'] = string_mod
 vim.o.foldtext = "v:lua.require'fake-ufo-2'.foldtext()"
 mod.enable(fold_buf)
-eq(string_mod.foldtext(), '  ufo', 'string fold text from another plugin gets the offset')
+eq(string_mod.foldtext(), ' ufo', 'string fold text from another plugin gets the offset')
 
 package.loaded['fake-ufo'] = nil
 package.loaded['fake-ufo-2'] = nil
@@ -214,7 +215,7 @@ local deferred = vim.defer_fn(function()
   mod.disable(other)
   eq(offset(other, 2), 0, 'disable clears the virtual text')
   mod.toggle(other)
-  eq(offset(other, 2), 5, 'toggle turns the indentation back on')
+  eq(offset(other, 2), 4, 'toggle turns the indentation back on')
   eq(mod.enabled(other), true, 'enabled reports the state')
   mod.disable(other)
   print(string.format('%d checks passed, %d failures', passed, failures))

@@ -1,5 +1,5 @@
 # md-indent.nvim
-Indents nested Markdown headings the way `org-indent-mode` indents org headings.
+Indents nested Markdown headings by their level, like Emacs does.
 The plugin adds the indentation as virtual text, so buffer text stays unchanged.
 Undo, diffs, and the saved file keep the original lines.
 
@@ -21,13 +21,16 @@ renders as:
 ```markdown
 # Heading
   some text asdasd
-  ## Subheading
-     some more text
-     ### Subsubheading
-         the text is aligned to the heading text, just like org mode
-  ## Subheading 2
-     lorem
+ ## Subheading
+    some more text
+  ### Subsubheading
+      the text is aligned to the heading text
+ ## Subheading 2
+    lorem
 ```
+
+A heading of level n sits `n - 1` columns in, and its body text lines up
+right past the hashes of the heading, at `2 * n` columns.
 
 ## Install
 Add the package to `init.lua`, then restart Nvim with `:restart`:
@@ -79,17 +82,15 @@ Pass these options to `require('md-indent').setup()`:
 - `:MDIndentToggle` - Switch the indentation on or off
 
 ## Behavior
-- A heading nests under the text of the heading above
-  - `## Sub` lines up at the column of the level 1 body text
-  - The nesting comes from the heading hashes only
+- A heading of level n sits one column further left for each parent level
+  - The offset of a heading line equals the level minus one
 - Body text lines up with the heading text above
-  - The offset equals the heading offset plus the hashes and the space after them
-- A setext heading keeps its text on the line above
-  - Body text under that heading gets the heading offset only
+  - The offset equals twice the level of the heading above
 - Each line keeps its own leading whitespace, and the plugin adds the offset on top
 - The plugin ignores headings in a fenced code block
 - The plugin treats a heading with 4 leading spaces or more as code, like CommonMark does
 - Blank lines get the heading offset only
+- The offset comes from the heading level alone, not from the heading above
 - Hashes without a space after them are body text
   - A heading that is still being typed does not move the line
 - The cursor and typed text sit after the indent
