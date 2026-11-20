@@ -45,6 +45,8 @@ All options are passed to |MDIndentSetup| equivalent, `require('md-indent').setu
                       headings. Default: false.
   indent_code_blocks  Indent fenced code block lines with the current heading.
                       Default: true. Set false to keep code lines flush left.
+  virtual_cursor      Park the cursor past the indent while it rests on a blank
+                      line, in normal and insert mode. Default: true.
 
 ===========================================================================
 Commands                                         *md-indent-commands*
@@ -70,6 +72,14 @@ original text. |'breakindent'| helps with wrapped lines.
 
 The extmarks pull left, so text typed at column 0 of an indented line lands
 after the indent, and the insert cursor is drawn after the indent too.
+
+While the cursor rests on a blank line, the plugin parks it at the column
+where a typed character would land, aligned with the text of the heading
+above. This is what the virtual_cursor option toggles. For the normal-mode
+cursor Nvim needs a window-local |'virtualedit'| "all" while parked, so in a
+parked state the column of a move off the blank line follows the screen
+column, like it does with stock Neovim virtual editing. The option value is
+restored when the plugin turns off.
 
 Folded lines show 'foldtext' instead of the line, so the plugin prefixes the
 fold text with the offset of the fold's first line. The plugin touches

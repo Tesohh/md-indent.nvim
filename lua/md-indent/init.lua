@@ -13,6 +13,8 @@ local defaults = {
   setext_headings = false,
   -- false keeps code block lines at their own indentation
   indent_code_blocks = true,
+  -- Show the cursor past the indent on blank lines
+  virtual_cursor = true,
 }
 
 M.options = vim.tbl_deep_extend('force', {}, defaults)
@@ -26,6 +28,11 @@ local builtin_foldtext = vim.o.foldtext -- default expression, restored on disab
 local assert_pending = false
 local foldtext_warned = false
 local patched = {} -- module.fn key -> { mod, fn, orig }
+local ve_wins = {} -- window -> true, we set a window-local 'virtualedit'
+local parked = {} -- window -> { lnum, col, vcol }, parked cursor
+local park_offsets = {} -- buffer -> { line = cursor column }
+local extmark_ids = {} -- buffer -> { line = extmark id of the pad }
+local bumped = {} -- buffer -> { line = line0, id, width }: insert-mode pad
 
 -- 'inline' virtual text shifts the buffer text right, since Nvim 0.10
 local function supported()
@@ -45,11 +52,14 @@ local function scan_options()
 end
 
 local function offsets_by_line(entries)
-  local map = {}
+  local map, cursors = {}, {}
   for _, e in ipairs(entries) do
     map[e.line] = e.width
+    if e.cursor then
+      cursors[e.line] = e.cursor
+    end
   end
-  return map
+  return map, cursors
 end
 
 -- The offset of the fold's first line, inside the fold rendering context.
@@ -143,18 +153,178 @@ function M.update(buf)
     return
   end
   local entries = indent.scan(vim.api.nvim_buf_get_lines(buf, 0, -1, false), scan_options())
-  fold_offsets[buf] = offsets_by_line(entries)
+  fold_offsets[buf], park_offsets[buf] = offsets_by_line(entries)
+  extmark_ids[buf] = {}
+  bumped[buf] = nil
   vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
   for _, e in ipairs(entries) do
-    vim.api.nvim_buf_set_extmark(buf, ns, e.line, 0, {
-      virt_text = { { string.rep(' ', e.width), M.options.hl_group } },
-      virt_text_pos = 'inline',
-      -- Left gravity keeps the extmark at column 0 when text is typed there,
-      -- which also draws the insert cursor after the indent.
-      right_gravity = false,
-      virt_text_repeat_linebreak = true,
-    })
+    if e.width > 0 then
+      extmark_ids[buf][e.line] = vim.api.nvim_buf_set_extmark(buf, ns, e.line, 0, {
+        virt_text = { { string.rep(' ', e.width), M.options.hl_group } },
+        virt_text_pos = 'inline',
+        -- Left gravity keeps the extmark at column 0 when text is typed there,
+        -- which also draws the insert cursor after the indent.
+        right_gravity = false,
+        virt_text_repeat_linebreak = true,
+      })
+    end
   end
+  if buf == vim.api.nvim_get_current_buf() then
+    M.park_cursor()
+  end
+end
+
+-- The byte column a virtual-editing move lands on when it carries screen
+-- column `vcol` onto `line`: the last character whose width still fits.
+local function carried_byte(line, vcol)
+  local col, cells = 0, 0
+  while col < #line do
+    local len = #line:sub(col + 1):match('^.[\128-\191]*')
+    local width = vim.fn.strdisplaywidth(line:sub(col + 1, col + len))
+    if cells + width > vcol then
+      break
+    end
+    cells = cells + width
+    col = col + len
+  end
+  return col
+end
+
+-- Drops our window-local 'virtualedit' back to the global value.
+local function drop_virtualedit(win)
+  ve_wins[win] = nil
+  pcall(function()
+    vim.api.nvim_win_call(win, function()
+      vim.cmd('setlocal virtualedit<')
+    end)
+  end)
+end
+
+-- Sets the pad of one line back to its scanned width, the state a bump left.
+local function restore_pad(buf)
+  local bump = bumped[buf]
+  bumped[buf] = nil
+  if not bump then
+    return
+  end
+  pcall(function()
+    if bump.width > 0 then
+      vim.api.nvim_buf_set_extmark(buf, ns, bump.line, 0, {
+        id = bump.id,
+        virt_text = { { string.rep(' ', bump.width), M.options.hl_group } },
+        virt_text_pos = 'inline',
+        right_gravity = false,
+        virt_text_repeat_linebreak = true,
+      })
+    else
+      vim.api.nvim_buf_del_extmark(buf, ns, bump.id)
+    end
+  end)
+end
+
+-- Sits the cursor past the indent on blank lines. The scanner records where
+-- typed text would land (the body column of the heading), and the below
+-- applies whenever the cursor rests on such a line:
+-- Normal mode: a cursor coladd with a window-local "all" of 'virtualedit'
+-- shows the cursor there, since Nvim drops the inline virtual text from the
+-- virtual column of an empty line.
+-- Insert mode: a coladd would pad typed text with spaces, so the pad of the
+-- line grows to the body column instead: the insert cursor is drawn right
+-- after it, and typed text keeps that column, with no jump at all.
+function M.park_cursor()
+  if not supported() then
+    return
+  end
+  local win = vim.api.nvim_get_current_win()
+  local buf = vim.api.nvim_win_get_buf(win)
+  if not enabled[buf] and not ve_wins[win] then
+    restore_pad(buf)
+    return
+  end
+  local pos = vim.fn.getcurpos()
+  local lnum, col, coladd = pos[2], pos[3] - 1, pos[4] or 0
+  local lines = vim.api.nvim_buf_get_lines(buf, lnum - 1, lnum, false)
+  local line = lines[1] or ''
+  local mode = vim.fn.mode()
+
+  -- Moving off a parked line carries the virtual column into the next line
+  -- as a real byte column; undo that, it is never where the user aimed.
+  local park = parked[win]
+  parked[win] = nil
+  if park and park.lnum ~= lnum and mode == 'n' and col ~= park.col then
+    -- The carried screen column compares against the line without its pad.
+    local target_pad = fold_offsets[buf] and fold_offsets[buf][lnum - 1] or 0
+    if col == carried_byte(line, park.vcol - target_pad) then
+      col = math.min(park.col, #line)
+      coladd = 0
+      pcall(vim.api.nvim_win_set_cursor, win, { lnum, col })
+    end
+  end
+
+  -- Blank lines park the cursor where typed text would land: the scanner
+  -- records that column per line.
+  local pad = park_offsets[buf] and park_offsets[buf][lnum - 1] or 0
+  local blank = line:match('^%s*$') ~= nil
+  local insert = mode:sub(1, 1) == 'i'
+    or mode:sub(1, 1) == 'R' or mode:sub(1, 2) == 'ni'
+  if insert and blank and pad > 0 and M.options.virtual_cursor then
+    restore_pad(buf)
+    -- A coladd would pad typed text with spaces, so make sure it is zero.
+    if coladd > 0 then
+      pcall(vim.api.nvim_win_set_cursor, win, { lnum, col })
+    end
+    if ve_wins[win] then
+      drop_virtualedit(win)
+    end
+    -- Grow the pad to the body column: the insert cursor lands right after
+    -- the virtual text, so this also puts the cursor where typing puts text.
+    local width = fold_offsets[buf] and fold_offsets[buf][lnum - 1] or 0
+    local id = extmark_ids[buf] and extmark_ids[buf][lnum - 1]
+    if id then
+      vim.api.nvim_buf_set_extmark(buf, ns, lnum - 1, 0, {
+        id = id,
+        virt_text = { { string.rep(' ', pad), M.options.hl_group } },
+        virt_text_pos = 'inline',
+        right_gravity = false,
+        virt_text_repeat_linebreak = true,
+      })
+      bumped[buf] = { line = lnum - 1, id = id, width = width }
+    else
+      local own = vim.api.nvim_buf_set_extmark(buf, ns, lnum - 1, 0, {
+        virt_text = { { string.rep(' ', pad), M.options.hl_group } },
+        virt_text_pos = 'inline',
+        right_gravity = false,
+        virt_text_repeat_linebreak = true,
+      })
+      bumped[buf] = { line = lnum - 1, id = own, width = 0 }
+    end
+    return
+  end
+  restore_pad(buf)
+
+  local want = (M.options.virtual_cursor and mode == 'n'
+    and blank and pad > 0) and pad or 0
+  if want == 0 then
+    if ve_wins[win] then
+      drop_virtualedit(win)
+    end
+    if coladd > 0 then
+      pcall(vim.api.nvim_win_set_cursor, win, { lnum, col })
+    end
+    return
+  end
+  if not ve_wins[win] then
+    vim.api.nvim_set_option_value('virtualedit', 'all', { win = win, scope = 'local' })
+    ve_wins[win] = true
+  end
+  if coladd ~= want then
+    pcall(vim.fn.cursor, { lnum, col + 1, want })
+  end
+  -- The carried column is the screen column as it renders: the byte column
+  -- with the pad of the line in front of it, plus the parked column itself.
+  local byte_vcol = col == 0 and 0
+    or ((fold_offsets[buf] and fold_offsets[buf][lnum - 1] or 0) + col)
+  parked[win] = { lnum = lnum, col = col, vcol = byte_vcol + want }
 end
 
 -- Coalesces consecutive changes into one update.
@@ -188,7 +358,44 @@ local function assert_foldtext()
   end
 end
 
--- Runs after the autocmds of other plugins, so the option ends up ours.
+-- Drops our window-local 'virtualedit' back to the global value and resets
+-- a parked coladd, which stays in the window's cursor across buffer switches.
+local function restore_virtualedit(win)
+  ve_wins[win] = nil
+  parked[win] = nil
+  pcall(function()
+    local pos = vim.api.nvim_win_get_cursor(win)
+    vim.api.nvim_win_set_cursor(win, pos)
+    vim.api.nvim_win_call(win, function()
+      vim.cmd('setlocal virtualedit<')
+    end)
+  end)
+end
+
+-- Undo our window-local 'virtualedit' in windows that no longer show an
+-- enabled buffer; park_cursor sets it for the window it parks the cursor in.
+local function assert_virtualedit()
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    local ok, buf = pcall(vim.api.nvim_win_get_buf, win)
+    if not ok or not enabled[buf] then
+      if ve_wins[win] then
+        restore_virtualedit(win)
+      end
+    end
+  end
+end
+
+-- Reasserts every option the plugin takes over, then re-parks the cursor.
+function M.refresh_windows()
+  if not supported() then
+    return
+  end
+  assert_foldtext()
+  assert_virtualedit()
+  M.park_cursor()
+end
+
+-- Runs after the autocmds of other plugins, so the options end up ours.
 function M.schedule_assert()
   if assert_pending then
     return
@@ -197,7 +404,7 @@ function M.schedule_assert()
   vim.schedule(function()
     assert_pending = false
     if next(enabled) then
-      assert_foldtext()
+      M.refresh_windows()
     end
   end)
 end
@@ -208,11 +415,9 @@ function M.enable(buf)
     vim.notify('md-indent: needs Nvim 0.10 or newer', vim.log.levels.WARN)
     return false
   end
-  if not enabled[buf] then
-    enabled[buf] = true
-    M.update(buf)
-  end
-  assert_foldtext()
+  enabled[buf] = true
+  M.update(buf)
+  M.refresh_windows()
   return true
 end
 
@@ -221,7 +426,20 @@ function M.disable(buf)
   enabled[buf] = nil
   pending[buf] = nil
   fold_offsets[buf] = nil
+  park_offsets[buf] = nil
+  extmark_ids[buf] = nil
+  bumped[buf] = nil
   vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+  for win in pairs(parked) do
+    parked[win] = nil
+  end
+  -- Unpark the cursor if the disabled buffer is the one under the cursor.
+  if vim.api.nvim_get_current_buf() == buf then
+    pcall(vim.api.nvim_win_set_cursor, 0, { vim.fn.line('.'), vim.fn.col('.') - 1 })
+  end
+  for win in pairs(ve_wins) do
+    restore_virtualedit(win)
+  end
   for _, win in ipairs(vim.api.nvim_list_wins()) do
     if vim.api.nvim_get_option_value('foldtext', { win = win }) == foldtext_expr then
       vim.api.nvim_set_option_value('foldtext', builtin_foldtext, { win = win })
@@ -252,7 +470,7 @@ function M.enabled(buf)
 end
 
 -- Updates buffers that already have the plugin on, so option changes apply.
-local function refresh()
+local function refresh_buffers()
   for buf in pairs(enabled) do
     M.update(buf)
   end
@@ -295,6 +513,30 @@ function M.setup(user_opts)
       enabled[ev.buf] = nil
       pending[ev.buf] = nil
       fold_offsets[ev.buf] = nil
+      park_offsets[ev.buf] = nil
+      extmark_ids[ev.buf] = nil
+      bumped[ev.buf] = nil
+      M.schedule_assert()
+    end,
+  })
+  vim.api.nvim_create_autocmd('WinClosed', {
+    group = group,
+    -- In WinClosed, ev.buf carries the window id.
+    callback = function(ev)
+      ve_wins[ev.buf] = nil
+      parked[ev.buf] = nil
+    end,
+  })
+  -- Blank lines park the cursor past the indent while it rests on them.
+  vim.api.nvim_create_autocmd({
+    'CursorMoved',
+    'CursorMovedI',
+    'ModeChanged',
+    'WinEnter',
+  }, {
+    group = group,
+    callback = function()
+      M.park_cursor()
     end,
   })
   vim.api.nvim_create_autocmd('ColorScheme', {
@@ -334,7 +576,7 @@ function M.setup(user_opts)
     M.toggle()
   end, { desc = 'Turn heading indentation on or off in the current buffer' })
 
-  refresh()
+  refresh_buffers()
 end
 
 return M

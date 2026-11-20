@@ -78,12 +78,14 @@ function M.scan(lines, opts)
   local out = {}
   local fence = nil -- open code fence: { char, len }
   local paragraph = false -- previous line is paragraph text (setext candidate)
+  local extra = nil -- cursor parking column, only set on blank lines
   local skip_until = opts.frontmatter and frontmatter_end(lines) or 0
 
   for i, line in ipairs(lines) do
     if i <= skip_until then
       paragraph = false
     else
+      extra = nil
       local closed = false
       if fence then
         if closes_fence(line, fence) then
@@ -135,7 +137,15 @@ function M.scan(lines, opts)
         elseif is_blank(line) then
           paragraph = false
           local top = stack[#stack]
-          offset = top and top.head or 0
+          if top then
+            offset = top.head
+            -- The cursor sits where typed text would land: the body offset of
+            -- the heading, plus the line's own spaces, only when the pad is
+            -- not already part of the byte column.
+            extra = top.body - (lead_width(line) > 0 and top.head or 0)
+          else
+            offset = 0
+          end
         else
           paragraph = true
           local top = stack[#stack]
@@ -143,8 +153,8 @@ function M.scan(lines, opts)
         end
       end
 
-      if offset > 0 and (not in_code or indent_code) then
-        out[#out + 1] = { line = i - 1, width = offset }
+      if (offset > 0 or extra) and (not in_code or indent_code) then
+        out[#out + 1] = { line = i - 1, width = offset, cursor = extra }
       end
     end
   end

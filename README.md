@@ -75,6 +75,7 @@ Pass these options to `require('md-indent').setup()`:
 - `frontmatter` - Skip the YAML metadata block at the top of the file, default `true`
 - `setext_headings` - Count `=` and `-` underlines as level 1 and level 2 headings, default `false`
 - `indent_code_blocks` - Indent code block lines with the heading, default `true`
+- `virtual_cursor` - Park the cursor past the indent on blank lines, default `true`
 
 ## Commands
 - `:MDIndentEnable` - Indent headings in the current buffer
@@ -95,6 +96,12 @@ Pass these options to `require('md-indent').setup()`:
   - A heading that is still being typed does not move the line
 - The cursor and typed text sit after the indent
   - The extmark pulls left, so text typed at column 0 lands after the indent
+  - On blank lines in normal and insert mode the cursor sits where the next
+    typed character lands, aligned with the text of the heading above
+  - The parked cursor borrows a window-local `'virtualedit'` of `all` while
+    parked, so moves off a parked blank line follow the screen column the way
+    stock Neovim does with virtual editing
+  - The borrowed option is restored when the plugin turns off
 - Fold lines keep the indent
   - The plugin prefixes the fold text with the offset of the first line of the fold
   - The plugin sets `'foldtext'` in windows that show an enabled buffer, so other buffers keep their own folding

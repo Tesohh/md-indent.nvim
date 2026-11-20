@@ -203,6 +203,97 @@ vim.api.nvim_win_close(plain_win, true)
 -- A heading removed by a change shifts the deeper headings up
 vim.api.nvim_buf_set_lines(buf, 2, 3, false, { 'text under level 1' })
 mod.schedule_update(buf)
+
+-- Parked cursor ---------------------------------------------------------------
+
+local function curpos()
+  local p = vim.fn.getcurpos()
+  return p[3], p[4] -- 1-based byte col, coladd
+end
+-- The level 3 heading body sits at 2 * 3 = 6 columns; the blank line under it
+-- parks the cursor there, where a typed character would land.
+local park_buf = render({ '### Sub3', '', 'text' })
+vim.api.nvim_set_current_buf(park_buf)
+-- Sets up our window-local 'virtualedit', which park_cursor needs.
+mod.refresh_windows()
+vim.api.nvim_win_set_cursor(0, { 2, 0 })
+mod.park_cursor()
+local pcol, padd = curpos()
+eq(padd, 6, 'park cursor uses the body offset of the heading above')
+eq(pcol, 1, 'park cursor keeps the byte column')
+-- A blank line keeps working when the heading pad is empty but text would
+-- still land deeper: a level 1 heading line has no pad, its body has.
+local bare_buf = render({ '# H', '' })
+vim.api.nvim_set_current_buf(bare_buf)
+mod.refresh_windows()
+vim.api.nvim_win_set_cursor(0, { 2, 0 })
+mod.park_cursor()
+local bcol, badd = curpos()
+eq(badd, 2, 'park cursor works on a blank line without a pad')
+eq(bcol, 1, 'park cursor keeps the byte column without a pad')
+-- A column carried onto an unindented line by virtual editing is undone.
+vim.api.nvim_set_current_buf(park_buf)
+mod.refresh_windows()
+-- simulate virtual editing carrying the parked column 6 onto '# Top'
+local carry_buf = render({ '### Sub3', '', '# Top', 'plain' })
+vim.api.nvim_set_current_buf(carry_buf)
+mod.refresh_windows()
+vim.api.nvim_win_set_cursor(0, { 2, 0 })
+mod.park_cursor()
+vim.fn.cursor({ 3, 6, 0 }) -- byte col 5, where the carried column would land
+mod.park_cursor()
+local scol, sadd = curpos()
+eq(sadd, 0, 'carried virtual columns lose the coladd')
+eq(scol, 1, 'carried virtual columns restore the parked byte column')
+-- The coladd is cleared again on a line with text.
+vim.api.nvim_win_set_cursor(0, { 3, 0 })
+mod.park_cursor()
+local tcol, tadd = curpos()
+eq(tadd, 0, 'park cursor clears the coladd on text lines')
+-- A coladd the user set outside the plugin is not kept.
+vim.fn.cursor({ 3, 2, 1 })
+mod.park_cursor()
+local ocol, oadd = curpos()
+eq(ocol, 2, 'park cursor keeps a user-set column')
+eq(oadd, 0, 'park cursor drops a user-set coladd')
+-- Insert mode grows the pad of the blank line, so the insert cursor is drawn
+-- where typed text lands and the coladd stays out of the way. The insert state
+-- is captured from a mapped key, so 'mode()' really is insert.
+local pnames = vim.api.nvim_get_namespaces()['md-indent']
+vim.api.nvim_set_current_buf(park_buf)
+mod.refresh_windows()
+vim.api.nvim_win_set_cursor(0, { 2, 0 })
+local insert_state = {}
+vim.keymap.set('i', '<F1>', function()
+  local exts = vim.api.nvim_buf_get_extmarks(0, pnames, { 1, 0 }, { 1, 0 }, { details = true })
+  insert_state.pads = #exts
+  insert_state.width = exts[1] and #exts[1][4].virt_text[1][1] or 0
+  insert_state.coladd = vim.fn.getcurpos()[4]
+end)
+local esc = vim.api.nvim_replace_termcodes('<Esc>', true, false, true)
+vim.fn.feedkeys('i' .. vim.api.nvim_replace_termcodes('<F1>', true, false, true) .. esc, 'x!')
+eq(insert_state.pads, 1, 'insert mode keeps a pad extmark on the blank line')
+eq(insert_state.width, 6, 'insert mode grows the pad to the body offset')
+eq(insert_state.coladd, 0, 'insert mode keeps the coladd out of typed text')
+eq(offset(park_buf, 1), 2, 'leaving insert restores the pad of the blank line')
+-- A blank line without a pad of its own (level 1 heading) gets a bump extmark
+-- in insert mode, and it is gone again afterwards.
+local bare_buf = render({ '# H', '' })
+vim.api.nvim_set_current_buf(bare_buf)
+mod.refresh_windows()
+vim.api.nvim_win_set_cursor(0, { 2, 0 })
+local bare_state = {}
+vim.keymap.set('i', '<F1>', function()
+  local exts = vim.api.nvim_buf_get_extmarks(0, pnames, { 1, 0 }, { 1, 0 }, { details = true })
+  bare_state.pads = #exts
+  bare_state.width = exts[1] and #exts[1][4].virt_text[1][1] or 0
+end)
+vim.fn.feedkeys('i' .. vim.api.nvim_replace_termcodes('<F1>', true, false, true) .. esc, 'x!')
+eq(bare_state.pads, 1, 'insert mode bumps a pad onto a blank line without one')
+eq(bare_state.width, 2, 'the bump pad is the body offset')
+eq(offset(bare_buf, 1), 0, 'the bump extmark is removed again after insert')
+-- No indent is added to the buffer text at any point.
+eq(vim.api.nvim_buf_get_lines(bare_buf, 1, 2, false)[1], '', 'the blank line is still empty')
 -- Exits with a failure if the deferred checks never run.
 vim.defer_fn(function()
   print('FAIL test runner timed out')
