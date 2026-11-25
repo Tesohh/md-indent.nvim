@@ -165,9 +165,29 @@ function M.update(buf)
   bumped[buf] = nil
   vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
   for _, e in ipairs(entries) do
+    -- Guides inside the pad are part of the pad text. Extra extmarks at column
+    -- 0 would break the marks of other plugins, like the heading bullets.
+    local chunks, outside = {}, {}
+    local at = 0
+    if M.options.guides then
+      for _, col in ipairs(e.guides or {}) do
+        if col < e.width then
+          if col > at then
+            chunks[#chunks + 1] = { string.rep(' ', col - at), M.options.hl_group }
+          end
+          chunks[#chunks + 1] = { M.options.guide_char, M.options.guide_hl_group }
+          at = col + 1
+        else
+          outside[#outside + 1] = col
+        end
+      end
+    end
+    if e.width > at then
+      chunks[#chunks + 1] = { string.rep(' ', e.width - at), M.options.hl_group }
+    end
     if e.width > 0 then
       extmark_ids[buf][e.line] = vim.api.nvim_buf_set_extmark(buf, ns, e.line, 0, {
-        virt_text = { { string.rep(' ', e.width), M.options.hl_group } },
+        virt_text = chunks,
         virt_text_pos = 'inline',
         -- Left gravity keeps the extmark at column 0 when text is typed there,
         -- which also draws the insert cursor after the indent.
@@ -175,17 +195,14 @@ function M.update(buf)
         virt_text_repeat_linebreak = true,
       })
     end
-    if M.options.guides then
-      for _, col in ipairs(e.guides or {}) do
-        -- A fixed window column, so the guide sits under the heading text
-        -- whatever the line holds
-        vim.api.nvim_buf_set_extmark(buf, ns, e.line, 0, {
-          virt_text = { { M.options.guide_char, M.options.guide_hl_group } },
-          virt_text_win_col = col,
-          hl_mode = 'combine',
-          priority = 200,
-        })
-      end
+    -- Only blank lines have guides past the pad, and they hold no bullets
+    for _, col in ipairs(outside) do
+      vim.api.nvim_buf_set_extmark(buf, ns, e.line, 0, {
+        virt_text = { { M.options.guide_char, M.options.guide_hl_group } },
+        virt_text_win_col = col,
+        hl_mode = 'combine',
+        priority = 200,
+      })
     end
   end
   if integrated then

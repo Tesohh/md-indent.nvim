@@ -121,7 +121,11 @@ local function offset(buf, line)
   local marks = vim.api.nvim_buf_get_extmarks(buf, ns, 0, -1, { details = true })
   for _, m in ipairs(marks) do
     if m[2] == line and m[4].virt_text then
-      return #m[4].virt_text[1][1]
+      local width = 0
+      for _, chunk in ipairs(m[4].virt_text) do
+        width = width + vim.fn.strdisplaywidth(chunk[1])
+      end
+      return width
     end
   end
   return 0
