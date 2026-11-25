@@ -61,7 +61,8 @@ local function closes_fence(line, fence)
   return marker ~= nil and marker:sub(1, 1) == fence.char and #marker >= fence.len
 end
 
--- Scans `lines` and returns { { line = 0-based index, width = n }, ... }.
+-- Scans `lines` and returns { { line = 0-based index, width = n, guides = { col, ... } }, ... }.
+-- `guides` are the columns of the indented headings that enclose the line.
 -- A heading of level n sits n - 1 columns in, and its body text lines up
 -- with the heading text at 2 * n. The level alone decides every offset. Only
 -- lines that need an offset are returned; existing line indentation is kept
@@ -112,6 +113,16 @@ function M.scan(lines, opts)
       -- A heading of level n sits n - 1 columns in, and its body text lines up
       -- with the heading text at 2 * n.
       local offset
+      local guides = {}
+      -- Columns of the indented headings that enclose this line
+      local function collect()
+        guides = {}
+        for _, s in ipairs(stack) do
+          if s.head > 0 then
+            guides[#guides + 1] = s.head
+          end
+        end
+      end
       local function place(heading_level)
         local lead = lead_width(line)
         offset = lead + heading_level - 1
@@ -122,6 +133,7 @@ function M.scan(lines, opts)
         while #stack > 0 and stack[#stack].level >= heading do
           stack[#stack] = nil
         end
+        collect()
         place(heading)
       else
         local underline = use_setext and paragraph
@@ -133,9 +145,11 @@ function M.scan(lines, opts)
           while #stack > 0 and stack[#stack].level >= level do
             stack[#stack] = nil
           end
+          collect()
           place(level)
         elseif is_blank(line) then
           paragraph = false
+          collect()
           local top = stack[#stack]
           if top then
             offset = top.head
@@ -148,13 +162,14 @@ function M.scan(lines, opts)
           end
         else
           paragraph = true
+          collect()
           local top = stack[#stack]
           offset = top and top.body or 0
         end
       end
 
       if (offset > 0 or extra) and (not in_code or indent_code) then
-        out[#out + 1] = { line = i - 1, width = offset, cursor = extra }
+        out[#out + 1] = { line = i - 1, width = offset, cursor = extra, guides = guides }
       end
     end
   end

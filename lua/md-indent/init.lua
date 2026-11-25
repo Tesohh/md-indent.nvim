@@ -15,6 +15,10 @@ local defaults = {
   indent_code_blocks = true,
   -- Show the cursor past the indent on blank lines
   virtual_cursor = true,
+  -- Draw a vertical guide under each indented heading
+  guides = true,
+  guide_char = '\u{2502}',
+  guide_hl_group = 'MdIndentGuide',
 }
 
 M.options = vim.tbl_deep_extend('force', {}, defaults)
@@ -32,6 +36,7 @@ local ve_wins = {} -- window -> true, we set a window-local 'virtualedit'
 local parked = {} -- window -> { lnum, col, vcol }, parked cursor
 local park_offsets = {} -- buffer -> { line = cursor column }
 local extmark_ids = {} -- buffer -> { line = extmark id of the pad }
+local integrated = false
 local bumped = {} -- buffer -> { line = line0, id, width }: insert-mode pad
 
 -- 'inline' virtual text shifts the buffer text right, since Nvim 0.10
@@ -41,6 +46,8 @@ end
 
 function M.highlight()
   vim.api.nvim_set_hl(0, 'MdIndent', { link = 'Normal', default = true })
+  local base = vim.fn.hlexists('IblIndent') == 1 and 'IblIndent' or 'Whitespace'
+  vim.api.nvim_set_hl(0, 'MdIndentGuide', { link = base, default = true })
 end
 
 local function scan_options()
@@ -168,6 +175,24 @@ function M.update(buf)
         virt_text_repeat_linebreak = true,
       })
     end
+    if M.options.guides then
+      for _, col in ipairs(e.guides or {}) do
+        -- A fixed window column, so the guide sits under the heading text
+        -- whatever the line holds
+        vim.api.nvim_buf_set_extmark(buf, ns, e.line, 0, {
+          virt_text = { { M.options.guide_char, M.options.guide_hl_group } },
+          virt_text_win_col = col,
+          hl_mode = 'combine',
+          priority = 200,
+        })
+      end
+    end
+  end
+  if integrated then
+    -- Its guides depend on our pad widths, so draw them again
+    pcall(function()
+      require('ibl').debounced_refresh(buf)
+    end)
   end
   if buf == vim.api.nvim_get_current_buf() then
     M.park_cursor()
@@ -409,6 +434,28 @@ function M.schedule_assert()
   end)
 end
 
+-- indent-blankline draws its guides over the first columns of a line, which
+-- is where our pad sits, so its guides are shifted right by the pad width.
+local function integrate_ibl()
+  local ok, hooks = pcall(require, 'ibl.hooks')
+  if not ok or integrated then
+    return
+  end
+  integrated = true
+  hooks.register(hooks.type.VIRTUAL_TEXT, function(_, buf, row, virt_text)
+    local width = enabled[buf] and fold_offsets[buf] and fold_offsets[buf][row]
+    if not width or width == 0 then
+      return virt_text
+    end
+    local out = {}
+    for _ = 1, width do
+      out[#out + 1] = { ' ', M.options.hl_group }
+    end
+    vim.list_extend(out, virt_text)
+    return out
+  end)
+end
+
 function M.enable(buf)
   buf = buf or vim.api.nvim_get_current_buf()
   if not supported() then
@@ -481,6 +528,7 @@ function M.setup(user_opts)
     M.options = vim.tbl_deep_extend('force', M.options, user_opts)
   end
   M.highlight()
+  integrate_ibl()
 
   local group = vim.api.nvim_create_augroup('md-indent', { clear = true })
   vim.api.nvim_create_autocmd('FileType', {

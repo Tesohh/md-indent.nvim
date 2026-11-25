@@ -31,6 +31,14 @@ local function scan(lines, opts)
   return out
 end
 
+local function scan_full(lines)
+  local out = {}
+  for _, e in ipairs(indent.scan(lines)) do
+    out[e.line] = e
+  end
+  return out
+end
+
 -- Unit tests of the scanner ---------------------------------------------------
 
 local example = {
@@ -204,6 +212,15 @@ vim.api.nvim_win_close(plain_win, true)
 vim.api.nvim_buf_set_lines(buf, 2, 3, false, { 'text under level 1' })
 mod.schedule_update(buf)
 
+-- Guides ----------------------------------------------------------------------
+
+local g = scan_full({ '# A', '## B', 'text', '', '### C', 'more' })
+eq(#g[2].guides, 1, 'body of a level 2 heading has one guide')
+eq(g[2].guides[1], 1, 'the guide sits under the heading text')
+eq(#g[4].guides, 1, 'a level 3 heading shows the guide of its parent')
+eq(#g[5].guides, 2, 'body of a level 3 heading has two guides')
+eq(g[0] == nil, true, 'a level 1 heading has no guide')
+
 -- Parked cursor ---------------------------------------------------------------
 
 local function curpos()
@@ -266,6 +283,7 @@ vim.api.nvim_win_set_cursor(0, { 2, 0 })
 local insert_state = {}
 vim.keymap.set('i', '<F1>', function()
   local exts = vim.api.nvim_buf_get_extmarks(0, pnames, { 1, 0 }, { 1, 0 }, { details = true })
+  exts = vim.tbl_filter(function(e) return e[4].virt_text_pos == 'inline' end, exts)
   insert_state.pads = #exts
   insert_state.width = exts[1] and #exts[1][4].virt_text[1][1] or 0
   insert_state.coladd = vim.fn.getcurpos()[4]
@@ -285,6 +303,7 @@ vim.api.nvim_win_set_cursor(0, { 2, 0 })
 local bare_state = {}
 vim.keymap.set('i', '<F1>', function()
   local exts = vim.api.nvim_buf_get_extmarks(0, pnames, { 1, 0 }, { 1, 0 }, { details = true })
+  exts = vim.tbl_filter(function(e) return e[4].virt_text_pos == 'inline' end, exts)
   bare_state.pads = #exts
   bare_state.width = exts[1] and #exts[1][4].virt_text[1][1] or 0
 end)

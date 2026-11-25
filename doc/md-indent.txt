@@ -47,6 +47,8 @@ All options are passed to |MDIndentSetup| equivalent, `require('md-indent').setu
                       Default: true. Set false to keep code lines flush left.
   virtual_cursor      Park the cursor past the indent while it rests on a blank
                       line, in normal and insert mode. Default: true.
+  guides              Draw a vertical guide under each indented heading.
+                      Default: true. Also: guide_char, guide_hl_group.
 
 ===========================================================================
 Commands                                         *md-indent-commands*

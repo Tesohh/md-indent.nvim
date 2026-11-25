@@ -76,6 +76,11 @@ Pass these options to `require('md-indent').setup()`:
 - `setext_headings` - Count `=` and `-` underlines as level 1 and level 2 headings, default `false`
 - `indent_code_blocks` - Indent code block lines with the heading, default `true`
 - `virtual_cursor` - Park the cursor past the indent on blank lines, default `true`
+- `guides` - Draw a vertical guide under each indented heading, default `true`
+- `guide_char` - Character of the guide, default `│`
+- `guide_hl_group` - Highlight group of the guide, default `MdIndentGuide`
+
+When indent-blankline is installed, its guides are shifted by the indent, so they stay with the text.
 
 ## Commands
 - `:MDIndentEnable` - Indent headings in the current buffer
